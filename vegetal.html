@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Les échelles du vivant — Plante : pois</title>
+<style>
+  :root{ --bg:#ffffff; --fg:#0b0d10; --muted:#5b6470; --accent:#2563eb; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  #stage{position:fixed;inset:0;overflow:hidden}
+
+  .layer{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); opacity:0;
+         transition:opacity 140ms linear; will-change:transform,opacity;}
+  .layer img{display:block; width:100%; height:auto}
+
+  .info{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:10;
+    display:flex; flex-direction:column; gap:10px; align-items:center; max-width:min(92vw,980px);}
+  .title{padding:14px 20px; border-radius:16px; width:100%;
+    border:1px solid rgba(15,23,42,.15); background:rgba(15,23,42,.08);
+    font-size:28px; font-weight:800; text-align:center; box-shadow:0 8px 26px rgba(0,0,0,.08);}
+  .desc{padding:12px 16px; border-radius:14px; width:100%;
+    border:1px solid rgba(15,23,42,.15); background:rgba(15,23,42,.06);
+    font-size:15px; line-height:1.35; color:#1f2a44; box-shadow:0 6px 18px rgba(0,0,0,.06);}
+
+  /* Règle */
+  .scale{ position:fixed; right:16px; top:50%; transform:translateY(-50%); z-index:15;
+    width:170px; height:min(72vh,720px); display:flex; align-items:center; gap:12px; }
+  .scale .bar{ position:relative; width:8px; height:100%; border-radius:999px;
+    background:linear-gradient(180deg, rgba(37,99,235,.25), rgba(37,99,235,.08));
+    box-shadow:inset 0 0 0 1px rgba(37,99,235,.35); }
+  .tick{ position:absolute; left:12px; width:140px; display:flex; flex-direction:column; gap:2px;
+    transform:translateY(50%); font-size:12px; color:#1f2a44; }
+  .tick .row{display:flex; align-items:center; gap:8px;}
+  .tick .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:.9}
+  .tick .lab{font-weight:700}
+  .tick small{color:#1f2a44b0}
+  .thumb{ position:absolute; left:-6px; width:20px; height:20px; border-radius:50%;
+    background:#fff; border:2px solid var(--accent); box-shadow:0 2px 8px rgba(0,0,0,.15);
+    transform:translate(-50%,50%); cursor:grab; }
+  .thumb:active{cursor:grabbing}
+
+  /* Boutons : HAUT GAUCHE, empilés */
+  .controls{
+    position:fixed; top:12px; left:16px; z-index:20;
+    display:flex; flex-direction:column; gap:8px; align-items:flex-start;
+  }
+  button{padding:8px 10px; border-radius:10px; background:rgba(15,23,42,.06); border:1px solid rgba(15,23,42,.2);
+    color:var(--fg); font-weight:600; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.06);}
+  button:hover{ background:rgba(15,23,42,.12); }
+
+  /* Consigne bleue, EXACTEMENT 3 lignes (pas de césure interne) */
+  .consigne{
+    position:fixed; bottom:16px; left:14px; z-index:20;
+    color:var(--accent); font-size:13px; line-height:1.32; font-weight:600;
+    background:transparent; border:none; box-shadow:none; padding:0; margin:0;
+  }
+  .consigne .ln{display:block; white-space:nowrap;} /* impose 1 ligne par span */
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div class="info">
+    <div class="title" id="titleBox">Échelle du vivant : Organisme</div>
+    <div class="desc" id="descBox" style="display:none"></div>
+  </div>
+
+  <div class="scale" id="scale">
+    <div class="bar" id="bar">
+      <div class="thumb" id="thumb" style="bottom:0%"></div>
+    </div>
+  </div>
+
+  <!-- Boutons -->
+  <div class="controls">
+    <button id="homeBtn">Retour au sommaire</button>
+    <button id="resetBtn">Revenir au début</button>
+  </div>
+
+  <!-- Consigne : 3 lignes fixes -->
+  <div class="consigne" aria-live="polite">
+    <span class="ln"><b>Consigne :</b> utiliser la molette de la souris</span>
+    <span class="ln">pour zoomer et mettre en évidence</span>
+    <span class="ln">les échelles du vivant.</span>
+  </div>
+
+<script>
+/* ---------- FICHIERS ---------- */
+const FILES = {
+  org:  'vegetal/images/01_vegetal.jpg',
+  apps: 'vegetal/images/02_appareils.jpg',
+  head: 'vegetal/images/03_organes.png',   // organe (feuille)
+  tis:  'vegetal/images/04_tissus.jpg',
+  cell: 'vegetal/images/05_cellules.png',
+  mol:  'vegetal/images/06_molecules.png',
+  atom: 'vegetal/images/07_atomes.png'
+};
+const ORDER = ['org','apps','head','tis','cell','mol','atom'];
+
+/* ---------- Layout fixe (départ → fin + offsets) ---------- */
+const L = {
+  org : {x:0,    y:0,   start:15, end:38},
+  apps: {x:-0.5, y:0,   start:38, end:38},
+  head: {x:10.5, y:-19, start:8,  end:30},
+  tis : {x:10.5, y:-19, start:8,  end:74},
+  cell: {x:22,   y:-0.5,start:17, end:80},
+  mol : {x:21,   y:0,   start:8,  end:100},
+  atom: {x:23.5, y:2.5, start:8,  end:80}
+};
+
+/* ---------- Textes cartouches ---------- */
+const LABELS={
+  org:'Organisme', apps:'Appareils', head:'Organe', tis:'Tissus', cell:'Cellules', mol:'Molécules', atom:'Atomes'
+};
+const DESC={
+  apps:"<b>Appareil</b> : ensemble d'organes concourant à une fonction (ex&nbsp;: appareil aérien, appareil souterrain).",
+  head:"<b>Organe</b> : ensemble délimité d'un ou de plusieurs tissus (ex&nbsp;: feuille, fruit, racine, etc.).",
+  tis:"<b>Tissu</b> : ensemble de cellules de structure semblable et spécialisées dans la même fonction (ex&nbsp;: épiderme de la feuille, parenchyme, etc.).",
+  cell:"<b>Cellule</b> : plus petite unité vivante qui constitue les êtres vivants. Elle est délimitée par une membrane plasmique et contient du cytoplasme.",
+  mol:"<b>Molécule</b> : assemblage de plusieurs atomes reliés entre eux par des liaisons (ex&nbsp;: eau, glucose, ADN, etc.).",
+  atom:"<b>Atome</b> : particule très petite, invisible à l'œil nu et qui est à la base de la constitution de la matière. Les atomes (ex&nbsp;: carbone, oxygène, hydrogène, etc.) s'associent en molécules."
+};
+
+/* ---------- Paramètres d’animation ---------- */
+const DUR_SCALE=0.90, DUR_CROSS=0.18, DIM_PREV=0.28, SENSITIVITY=0.0009;
+const EXPS={org:0,apps:-1,head:-2,tis:-3,cell:-6,mol:-9,atom:-12};
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+
+/* ---------- Timeline (scale(i) → cross(i→i+1)) ---------- */
+const SEG=[];
+for(let i=0;i<ORDER.length;i++){
+  SEG.push({type:'scale', id:ORDER[i], len:DUR_SCALE});
+  if(i<ORDER.length-1) SEG.push({type:'cross', from:ORDER[i], to:ORDER[i+1], len:DUR_CROSS});
+}
+const P_MAX = SEG.reduce((a,s)=>a+s.len,0);
+
+/* ---------- DOM ---------- */
+const stage=document.getElementById('stage');
+const titleBox=document.getElementById('titleBox');
+const descBox=document.getElementById('descBox');
+const bar=document.getElementById('bar');
+const thumb=document.getElementById('thumb');
+
+let layers={}, p=0, wheelLock=false;
+const IS_FILE = location.protocol==='file:'; // cache-bust en http(s)
+
+/* ---------- Chargement images ---------- */
+async function buildImages(){
+  layers={};
+  for(const id of ORDER){
+    const src=FILES[id];
+    await new Promise((res)=>{
+      const wrap=document.createElement('div'); wrap.className='layer';
+      wrap.style.zIndex=String(10+ORDER.indexOf(id));
+      const img=new Image(); img.alt=LABELS[id]||id;
+      img.onload=()=>{ wrap.appendChild(img); stage.appendChild(wrap); layers[id]={el:wrap,img,id}; res(); };
+      img.onerror=()=>{ console.warn('Image manquante:', id, src); res(); };
+      img.src = IS_FILE ? src : (src + (src.includes('?')?'':'?v='+(Date.now()%99999)));
+    });
+  }
+}
+
+/* ---------- Helpers ---------- */
+function setSize(id, vmin){
+  const Lr=layers[id]; if(!Lr) return;
+  const {x=0,y=0}=L[id]||{};
+  Lr.el.style.width = vmin+'vmin';
+  Lr.el.style.transform = `translate(calc(-50% + ${x}vmin), calc(-50% + ${y}vmin))`;
+}
+function setOpacity(id,a){ const Lr=layers[id]; if(Lr) Lr.el.style.opacity=clamp(a,0,1); }
+function setCard(id){
+  titleBox.textContent = 'Échelle du vivant : ' + (LABELS[id]||id);
+  const d=DESC[id]; if(d){ descBox.style.display='block'; descBox.innerHTML=d; } else descBox.style.display='none';
+}
+function setThumb(id){ const y=((EXPS[id]-(-12))/(0-(-12)))*100; thumb.style.bottom=`${y}%`; }
+
+/* ---------- Rendu ---------- */
+function render(){
+  Object.values(layers).forEach(Lr=>{ if(Lr) Lr.el.style.opacity=0; });
+
+  let acc=0, si=-1, t=0;
+  for(let i=0;i<SEG.length;i++){
+    if(p < acc + SEG[i].len){ si=i; t=(SEG[i].len? (p-acc)/SEG[i].len : 0); break; }
+    acc+=SEG[i].len;
+  }
+  if(si<0){ si=SEG.length-1; t=1; }
+  const seg=SEG[si];
+
+  const showPrev = (currId)=>{
+    const idx = ORDER.indexOf(currId);
+    if(idx<=0) return;
+    const prev = ORDER[idx-1];
+    if(currId==='apps') return; // pas d’organisme sous “appareils”
+    setSize(prev, L[prev].end);
+    setOpacity(prev, DIM_PREV);
+  };
+
+  if(seg.type==='scale'){
+    const id=seg.id;
+    showPrev(id);
+    const v=L[id].start + (L[id].end - L[id].start)*t;
+    setSize(id, v); setOpacity(id,1); setCard(id); setThumb(id);
+    if(ORDER.indexOf(id)>=1) setOpacity('org',0); // on masque l’organisme dès “appareils”
+  }else{
+    const {from,to}=seg;
+    if(to!=='apps'){ setSize(from, L[from].end); setOpacity(from, DIM_PREV); }
+    else{ setOpacity('org',0); }
+    setSize(to, L[to].start); setOpacity(to, t); setCard(to); setThumb(to);
+  }
+}
+
+/* ---------- Interactions ---------- */
+window.addEventListener('wheel',(e)=>{
+  e.preventDefault(); if(wheelLock) return; wheelLock=true;
+  requestAnimationFrame(()=>{
+    p = clamp(p + e.deltaY*SENSITIVITY, 0, P_MAX);
+    render(); wheelLock=false;
+  });
+},{passive:false});
+
+let tY=null;
+window.addEventListener('touchstart',e=>{ if(e.touches.length===1) tY=e.touches[0].clientY; },{passive:true});
+window.addEventListener('touchmove',e=>{
+  if(tY==null||e.touches.length!==1) return;
+  const dy=tY - e.touches[0].clientY; tY=e.touches[0].clientY;
+  p = clamp(p + dy*SENSITIVITY*0.5, 0, P_MAX); render();
+},{passive:true});
+window.addEventListener('touchend',()=>{ tY=null; },{passive:true});
+
+/* ---------- Boutons ---------- */
+document.getElementById('resetBtn').addEventListener('click',()=>{ p=0; render(); });
+document.getElementById('homeBtn').addEventListener('click',()=>{ window.location.href='sommaire.html'; });
+
+/* ---------- Repères ---------- */
+(function buildTicks(){
+  const stops=[{id:'org',exp:0,name:'mètre',sym:'m'},{id:'apps',exp:-1,name:'décimètre',sym:'dm'},
+               {id:'head',exp:-2,name:'centimètre',sym:'cm'},{id:'tis',exp:-3,name:'millimètre',sym:'mm'},
+               {id:'cell',exp:-6,name:'micromètre',sym:'µm'},{id:'mol',exp:-9,name:'nanomètre',sym:'nm'},
+               {id:'atom',exp:-12,name:'picomètre',sym:'pm'}];
+  stops.forEach(s=>{
+    const el=document.createElement('div'); el.className='tick';
+    el.style.bottom=`${((s.exp-(-12))/(0-(-12)))*100}%`;
+    const expHTML=(s.exp===0)?'':` — 10<sup>${s.exp}</sup> m`;
+    el.innerHTML=`<div class="row"><span class="dot"></span><span class="lab">${s.name}</span></div><small>(${s.sym})${expHTML}</small>`;
+    bar.appendChild(el);
+  });
+})();
+
+/* ---------- Boot ---------- */
+(async function boot(){
+  await buildImages();
+  p = 0;                            // départ tout en haut
+  setSize('org', L.org.start); setOpacity('org',1);
+  titleBox.textContent='Échelle du vivant : Organisme';
+  descBox.style.display='none';
+  setThumb('org');
+  render();
+})();
+</script>
+</body>
+</html>
+

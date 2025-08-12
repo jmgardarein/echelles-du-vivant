@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Les échelles du vivant — Animal : chien</title>
+<style>
+  :root{ --bg:#ffffff; --fg:#0b0d10; --muted:#5b6470; --accent:#2563eb; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  #stage{position:fixed;inset:0;overflow:hidden}
+
+  .layer{position:absolute; left:50%; top:50%;
+    transform:translate(-50%, -50%) scale(1);
+    opacity:0; transition:opacity 180ms linear; will-change:transform,opacity;}
+  .layer img{display:block; width:100%; height:auto}
+
+  .info{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    z-index:10; display:flex; flex-direction:column; gap:10px;
+    align-items:center; max-width:min(92vw,980px);
+  }
+  .title{
+    padding:14px 20px; border-radius:16px;
+    border:1px solid rgba(15,23,42,.15); background:rgba(15,23,42,.08);
+    font-size:28px; font-weight:800; text-align:center;
+    width:100%; box-shadow:0 8px 26px rgba(0,0,0,.08);
+  }
+  .desc{
+    padding:12px 16px; border-radius:14px;
+    border:1px solid rgba(15,23,42,.15); background:rgba(15,23,42,.06);
+    font-size:15px; line-height:1.35; color:#1f2a44;
+    width:100%; box-shadow:0 6px 18px rgba(0,0,0,.06);
+  }
+  .desc b{color:#0b3aa5}
+
+  /* Règle (échelle bleue) */
+  .scale{ position:fixed; right:16px; top:50%; transform:translateY(-50%); z-index:15;
+    width:170px; height:min(72vh,720px); display:flex; align-items:center; gap:12px; }
+  .scale .bar{ position:relative; width:8px; height:100%; border-radius:999px;
+    background:linear-gradient(180deg, rgba(37,99,235,.25), rgba(37,99,235,.08));
+    box-shadow:inset 0 0 0 1px rgba(37,99,235,.35); }
+  .tick{ position:absolute; left:12px; width:140px; display:flex; flex-direction:column; gap:2px;
+    transform:translateY(50%); font-size:12px; color:#1f2a44; }
+  .tick .row{display:flex; align-items:center; gap:8px;}
+  .tick .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:.9}
+  .tick .lab{font-weight:700}
+  .tick small{color:var(--muted)}
+  .thumb{ position:absolute; left:-6px; width:20px; height:20px; border-radius:50%;
+    background:#fff; border:2px solid var(--accent); box-shadow:0 2px 8px rgba(0,0,0,.15);
+    transform:translate(-50%,50%); cursor:grab; }
+  .thumb:active{cursor:grabbing}
+
+  /* Boutons empilés en haut à gauche */
+  .controls{
+    position:fixed; top:12px; left:16px; z-index:20;
+    display:flex; flex-direction:column; gap:8px; align-items:flex-start;
+  }
+  .controls button{
+    padding:8px 12px; border-radius:10px;
+    background:rgba(15,23,42,.06); border:1px solid rgba(15,23,42,.2);
+    color:var(--fg); font-weight:600; cursor:pointer;
+    box-shadow:0 6px 18px rgba(0,0,0,.06);
+  }
+  .controls button:hover{ background:rgba(15,23,42,.12); }
+  .controls button:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; }
+
+  /* Consigne bleue sur EXACTEMENT 3 lignes (retours <br> + nowrap) */
+  .consigne{
+    position:fixed; bottom:16px; left:14px; z-index:20;
+    width:270px;           /* largeur choisie pour tenir sur 3 lignes */
+    color:var(--accent); font-size:13px; line-height:1.32; font-weight:600;
+    background:transparent; border:none; box-shadow:none; padding:0; margin:0;
+  }
+  .consigne .nowrap{white-space:nowrap;}
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div class="info">
+    <div class="title" id="titleBox">Échelle du vivant : Organisme</div>
+    <div class="desc" id="descBox" style="display:none"></div>
+  </div>
+
+  <div class="scale" id="scale">
+    <div class="bar" id="bar">
+      <div class="thumb" id="thumb" style="bottom:0%"></div>
+    </div>
+  </div>
+
+  <!-- Boutons -->
+  <div class="controls">
+    <button id="homeBtn">Retour au sommaire</button>
+    <button id="resetBtn">Revenir au début</button>
+  </div>
+
+  <!-- Consigne (3 lignes fixes) -->
+  <div class="consigne" aria-live="polite">
+    <span class="nowrap"><b>Consigne :</b> utiliser la molette de la souris</span><br>
+    <span class="nowrap">pour zoomer et mettre en évidence</span><br>
+    <span class="nowrap">les échelles du vivant.</span>
+  </div>
+
+<script>
+/* ---------- OFFSETS ---------- */
+const OFFSETS = {
+  org:{x:0,y:0}, apps:{x:0,y:0}, orgn:{x:0,y:0},
+  head:{x:-21,y:-14},
+  tis:{x:-13,y:-24},
+  cell:{x:-14.5,y:-22},
+  mol:{x:-9,y:-29},
+  atom:{x:-9,y:-29}
+};
+
+/* ---------- TAILLES ---------- */
+const SIZE = {
+  org_start:0.20, org_end:0.60,
+  apps_fixed:0.60,
+  orgn_fixed:0.60,
+  head_from:0.20, head_to:0.70,
+  tis_from:0.05,  tis_to:0.70,
+  cell_fixed:0.70,
+  mol_from:0.05,  mol_to:0.70,
+  atom_fixed:0.68
+};
+
+/* ---------- Libellés & descriptions ---------- */
+const LABELS = {
+  org:'Organisme', apps:'Appareils', orgn:'Organe', head:'Organe',
+  tis:'Tissus', cell:'Cellules', mol:'Molécules', atom:'Atomes'
+};
+const DESCRIPTIONS = {
+  apps: "<b>Appareil (ou système)</b> : ensemble d'organes qui participent à une grande fonction biologique (ex&nbsp;: appareil digestif, appareil respiratoire, système nerveux, etc.).",
+  orgn: "<b>Organe</b> : ensemble délimité d'un ou de plusieurs tissus (ex&nbsp;: estomac, poumon, cerveau, etc.).",
+  head: "<b>Organe</b> : ensemble délimité d'un ou de plusieurs tissus (ex&nbsp;: estomac, poumon, cerveau, etc.).",
+  tis:  "<b>Tissu</b> : ensemble de cellules de structure semblable et spécialisées dans la même fonction (ex&nbsp;: tissu nerveux, etc.).",
+  cell: "<b>Cellule</b> : plus petite unité vivante qui constitue les êtres vivants. Elle est délimitée par une membrane plasmique et contient du cytoplasme.",
+  mol:  "<b>Molécule</b> : assemblage de plusieurs atomes reliés entre eux par des liaisons (ex&nbsp;: eau, glucose, ADN, etc.).",
+  atom:"<b>Atome</b> : particule très petite, invisible à l'œil nu et qui est à la base de la constitution de la matière. Les atomes (ex&nbsp;: carbone, oxygène, hydrogène, etc.) s'associent en molécules."
+};
+
+/* ---------- Règle ---------- */
+const SCALE_STOPS = [
+  {id:'org',  name:'mètre',      sym:'m',  exp:  0},
+  {id:'apps', name:'décimètre',  sym:'dm', exp: -1},
+  {id:'orgn', name:'centimètre', sym:'cm', exp: -2},
+  {id:'tis',  name:'millimètre', sym:'mm', exp: -3},
+  {id:'cell', name:'micromètre', sym:'µm', exp: -6},
+  {id:'mol',  name:'nanomètre',  sym:'nm', exp: -9},
+  {id:'atom', name:'picomètre',  sym:'pm', exp:-12}
+];
+const EXP_MIN = -12, EXP_MAX = 0;
+
+/* ---------- Chargeur d’images robuste ---------- */
+const NAME_BASES = {
+  org:  ['animal/images/01_animal','animal/images/01-animal','animal/images/01 animal','animal/images/animal'],
+  apps: ['animal/images/02_appareils','animal/images/02-appareils'],
+  orgn: ['animal/images/03_organes','animal/images/03-organes'],
+  head: ['animal/images/04_tete','animal/images/04_tête','animal/images/04_organes','animal/images/04-organes'],
+  tis:  ['animal/images/05_tissus','animal/images/05-tissus'],
+  cell: ['animal/images/06_cellules','animal/images/06-cellules','animal/images/06_tissus','animal/images/06-tissus'],
+  mol:  ['animal/images/07_molecules','animal/images/07_molécules','animal/images/07-molecules','animal/images/07-molécules'],
+  atom: ['animal/images/08_atomes','animal/images/08-atomes','animal/images/atomes']
+};
+const EXTENSIONS = ['jpg','jpeg','JPG','png','webp'];
+
+/* IMPORTANT: correctif pour l’ouverture en local (file://) */
+const IS_FILE = location.protocol === 'file:';
+
+function stripAccents(s){ try { return s.normalize('NFD').replace(/[\u0300-\u036f]/g,''); } catch { return s; } }
+function candidatesFromBase(base){
+  const forms = new Set();
+  const b2 = stripAccents(base);
+  [base,b2].forEach(b=>{
+    forms.add(b); forms.add(b.replace(/_/g,'-')); forms.add(b.replace(/_/g,' '));
+    forms.add(b.replace(/-/g,'_')); forms.add(b.replace(/ /g,'_'));
+  });
+  const out=[]; forms.forEach(f=>EXTENSIONS.forEach(ext=>out.push(`${f}.${ext}`)));
+  return out;
+}
+function resolveFirstExisting(cands){
+  return new Promise((resolve,reject)=>{
+    let i=0;
+    const tryNext=()=>{
+      if(i>=cands.length) return reject(new Error('not found'));
+      const src=cands[i++], im=new Image();
+      im.onload=()=>resolve(src); im.onerror=()=>tryNext();
+      const u = src;
+      im.src = IS_FILE ? u : (u + (u.includes('?') ? '' : '?v='+(Date.now()%99999)));
+    };
+    tryNext();
+  });
+}
+
+/* ---------- Timeline (défilement) ---------- */
+const TL = [
+  {type:'scale', id:'org',  from:SIZE.org_start, to:SIZE.org_end, len:1.00},
+  {type:'cross', fromId:'org',  toId:'apps', size:SIZE.apps_fixed, len:0.15},
+  {type:'hold',  id:'apps', size:SIZE.apps_fixed, len:0.30},
+  {type:'cross', fromId:'apps', toId:'orgn', size:SIZE.orgn_fixed, len:0.15},
+  {type:'scale', id:'head', from:SIZE.head_from, to:SIZE.head_to, len:0.80},
+  {type:'scale', id:'tis',  from:SIZE.tis_from,  to:SIZE.tis_to,  len:0.80},
+  {type:'cross', fromId:'tis', toId:'cell', size:SIZE.cell_fixed, len:0.15},
+  {type:'hold',  id:'cell', size:SIZE.cell_fixed, len:0.25},
+  {type:'scale', id:'mol',  from:SIZE.mol_from,  to:SIZE.mol_to,  len:0.80},
+  {type:'cross', fromId:'mol', toId:'atom', size:SIZE.atom_fixed, len:0.15}
+];
+const SCROLL_SENSITIVITY = 0.0018;
+
+/* ---------- DOM ---------- */
+const stage   = document.getElementById('stage');
+const titleBox= document.getElementById('titleBox');
+const descBox = document.getElementById('descBox');
+const bar     = document.getElementById('bar');
+const thumb   = document.getElementById('thumb');
+
+let layers={}, p=0, pMax=TL.reduce((a,s)=>a+s.len,0), wheelLock=false;
+
+/* ---------- Build images ---------- */
+async function buildImages(){
+  for (const [id,bases] of Object.entries(NAME_BASES)){
+    const all=[]; bases.forEach(b=>all.push(...candidatesFromBase(b)));
+    try{
+      const src=await resolveFirstExisting(all);
+      const wrap=document.createElement('div');
+      wrap.className='layer';
+      wrap.style.zIndex=String(Object.keys(NAME_BASES).indexOf(id)+10);
+      wrap.dataset.id=id; wrap.style.opacity=0; wrap.style.width='10vmin';
+      const img=new Image(); img.src=src; img.alt=LABELS[id]||id;
+      wrap.appendChild(img); stage.appendChild(wrap);
+      layers[id]={el:wrap,img,id};
+    }catch{
+      layers[id]={el:null,img:null,id};
+    }
+  }
+}
+
+/* ---------- Utils ---------- */
+function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+function lerp(a,b,t){ return a + (b-a)*t; }
+function setSize(id,size){
+  const L=layers[id]; if(!L||!L.el) return;
+  const off=OFFSETS[id]||{x:0,y:0};
+  L.el.style.width=(size*100)+'vmin';
+  L.el.style.transform=`translate(calc(-50% + ${off.x}vmin), calc(-50% + ${off.y}vmin))`;
+}
+function setOpacity(id,a){ const L=layers[id]; if(L&&L.el) L.el.style.opacity=clamp(a,0,1); }
+
+/* ---------- p ↔ exponent ---------- */
+const ANCHORS=(()=>{
+  let acc=0, arr=[];
+  acc+=TL[0].len;                        arr.push({id:'org',  p:acc});
+  acc+=TL[1].len+TL[2].len;              arr.push({id:'apps', p:acc});
+  acc+=TL[3].len;                        arr.push({id:'orgn', p:acc});
+  acc+=TL[4].len;                        arr.push({id:'head', p:acc});
+  acc+=TL[5].len;                        arr.push({id:'tis',  p:acc});
+  acc+=TL[6].len+TL[7].len;              arr.push({id:'cell', p:acc});
+  acc+=TL[8].len;                        arr.push({id:'mol',  p:acc});
+  acc+=TL[9].len;                        arr.push({id:'atom', p:acc});
+  return arr;
+})();
+const EXPS = { org:0, apps:-1, orgn:-2, head:-2, tis:-3, cell:-6, mol:-9, atom:-12 };
+function setThumbToExp(exp){
+  const y=((exp-EXP_MIN)/(EXP_MAX-EXP_MIN))*100;
+  thumb.style.bottom=`${y}%`;
+}
+
+/* ---------- Règle UI ---------- */
+function buildTicks(){
+  SCALE_STOPS.forEach(s=>{
+    const pos=((s.exp-EXP_MIN)/(EXP_MAX-EXP_MIN))*100;
+    const el=document.createElement('div');
+    el.className='tick'; el.style.bottom=`${pos}%`;
+    const expHTML=(s.exp===0)?'':` — 10<sup>${s.exp}</sup> m`;
+    el.innerHTML=`<div class="row"><span class="dot"></span><span class="lab">${s.name}</span></div>
+                  <small>(${s.sym})${expHTML}</small>`;
+    bar.appendChild(el);
+    el.addEventListener('click', ()=>{
+      const anchor = ANCHORS.find(a=>EXPS[a.id]===s.exp);
+      if(anchor){ p = anchor.p; render(); }
+    });
+  });
+}
+(function enableDrag(){
+  let dragging=false;
+  const onAt=(clientY)=>{
+    const rect=bar.getBoundingClientRect();
+    const clamped=clamp(clientY,rect.top,rect.bottom);
+    const t=1-(clamped-rect.top)/rect.height;
+    const exp=EXP_MIN + t*(EXP_MAX-EXP_MIN);
+    let best=ANCHORS[0], bestd=1e9;
+    ANCHORS.forEach(a=>{ const d=Math.abs(EXPS[a.id] - exp); if(d<bestd){best=a;bestd=d;}});
+    p = best.p;
+    render();
+  };
+  thumb.addEventListener('mousedown',e=>{dragging=true;e.preventDefault();});
+  window.addEventListener('mousemove',e=>{if(dragging) onAt(e.clientY);});
+  window.addEventListener('mouseup',()=>dragging=false);
+  bar.addEventListener('mousedown',e=>{onAt(e.clientY); dragging=true;});
+  // Touch
+  thumb.addEventListener('touchstart',()=>{dragging=true;},{passive:true});
+  window.addEventListener('touchmove',e=>{if(dragging&&e.touches[0]) onAt(e.touches[0].clientY);},{passive:true});
+  window.addEventListener('touchend',()=>dragging=false);
+})();
+
+/* ---------- Rendu ---------- */
+function render(){
+  Object.values(layers).forEach(L=>{ if(L&&L.el) L.el.style.opacity=0; });
+
+  let acc=0;
+
+  if(p < (acc+TL[0].len)){
+    const t=(p-acc)/TL[0].len; setOpacity('org',1);
+    const sz=lerp(SIZE.org_start,SIZE.org_end,Math.max(0,Math.min(1,t)));
+    setSize('org',sz); updateInfo('Échelle du vivant : '+LABELS.org, null);
+    setThumbToExp(EXPS.org); return;
+  }
+  acc+=TL[0].len; setOpacity('org',1); setSize('org',SIZE.org_end);
+
+  if(p < (acc+TL[1].len)){
+    const t=(p-acc)/TL[1].len; setSize('org',SIZE.org_end); setSize('apps',SIZE.apps_fixed);
+    setOpacity('org',1-t); setOpacity('apps',t);
+    updateInfo('Échelle du vivant : '+LABELS.apps, DESCRIPTIONS.apps);
+    setThumbToExp(EXPS.apps); return;
+  }
+  acc+=TL[1].len; setOpacity('apps',1); setSize('apps',SIZE.apps_fixed);
+
+  if(p < (acc+TL[2].len)){
+    updateInfo('Échelle du vivant : '+LABELS.apps, DESCRIPTIONS.apps);
+    setThumbToExp(EXPS.apps); return;
+  }
+  acc+=TL[2].len;
+
+  if(p < (acc+TL[3].len)){
+    const t=(p-acc)/TL[3].len; setSize('orgn',SIZE.orgn_fixed);
+    setOpacity('apps',1-t); setOpacity('orgn',t);
+    updateInfo('Échelle du vivant : '+LABELS.orgn, DESCRIPTIONS.orgn);
+    setThumbToExp(EXPS.orgn); return;
+  }
+  acc+=TL[3].len; setOpacity('orgn',1); setSize('orgn',SIZE.orgn_fixed);
+  updateInfo('Échelle du vivant : '+LABELS.orgn, DESCRIPTIONS.orgn);
+  setThumbToExp(EXPS.orgn);
+
+  if(p < (acc+TL[4].len)){
+    const t=(p-acc)/TL[4].len; const sz=lerp(SIZE.head_from,SIZE.head_to,Math.max(0,Math.min(1,t)));
+    setOpacity('head',1); setSize('head',sz);
+    updateInfo('Échelle du vivant : '+LABELS.head, DESCRIPTIONS.head);
+    setThumbToExp(EXPS.head); return;
+  }
+  acc+=TL[4].len; setOpacity('head',1); setSize('head',SIZE.head_to);
+  updateInfo('Échelle du vivant : '+LABELS.head, DESCRIPTIONS.head);
+  setThumbToExp(EXPS.head);
+
+  if(p < (acc+TL[5].len)){
+    const t=(p-acc)/TL[5].len; const sz=lerp(SIZE.tis_from,SIZE.tis_to,Math.max(0,Math.min(1,t)));
+    setOpacity('tis',1); setSize('tis',sz);
+    updateInfo('Échelle du vivant : '+LABELS.tis, DESCRIPTIONS.tis);
+    setThumbToExp(EXPS.tis); return;
+  }
+  acc+=TL[5].len; setOpacity('tis',1); setSize('tis',SIZE.tis_to);
+  updateInfo('Échelle du vivant : '+LABELS.tis, DESCRIPTIONS.tis);
+  setThumbToExp(EXPS.tis);
+
+  if(p < (acc+TL[6].len)){
+    const t=(p-acc)/TL[6].len; setSize('tis',SIZE.tis_to); setSize('cell',SIZE.cell_fixed);
+    setOpacity('tis',1-t); setOpacity('cell',t);
+    updateInfo('Échelle du vivant : '+LABELS.cell, DESCRIPTIONS.cell);
+    setThumbToExp(EXPS.cell); return;
+  }
+  acc+=TL[6].len;
+
+  if(p < (acc+TL[7].len)){
+    setOpacity('cell',1); setSize('cell',SIZE.cell_fixed);
+    updateInfo('Échelle du vivant : '+LABELS.cell, DESCRIPTIONS.cell);
+    setThumbToExp(EXPS.cell); return;
+  }
+  acc+=TL[7].len;
+
+  if(p < (acc+TL[8].len)){
+    const t=(p-acc)/TL[8].len; const sz=lerp(SIZE.mol_from,SIZE.mol_to,Math.max(0,Math.min(1,t)));
+    setOpacity('cell',1); setSize('cell',SIZE.cell_fixed);
+    setOpacity('mol',1); setSize('mol',sz);
+    updateInfo('Échelle du vivant : '+LABELS.mol, DESCRIPTIONS.mol);
+    setThumbToExp(EXPS.mol); return;
+  }
+  acc+=TL[8].len; setOpacity('mol',1); setSize('mol',SIZE.mol_to);
+  updateInfo('Échelle du vivant : '+LABELS.mol, DESCRIPTIONS.mol);
+  setThumbToExp(EXPS.mol);
+
+  const t = Math.max(0, Math.min(1, (p-acc)/TL[9].len ));
+  setSize('mol',SIZE.mol_to); setSize('atom',SIZE.atom_fixed);
+  setOpacity('mol',1-t); setOpacity('atom',t);
+  updateInfo('Échelle du vivant : '+LABELS.atom, DESCRIPTIONS.atom);
+  setThumbToExp(EXPS.atom);
+}
+
+function updateInfo(title, descHtml){
+  titleBox.textContent = title;
+  if(descHtml){ descBox.style.display='block'; descBox.innerHTML = descHtml; }
+  else{ descBox.style.display='none'; }
+}
+
+/* ---------- Interactions scroll/touch ---------- */
+window.addEventListener('wheel',(e)=>{
+  e.preventDefault(); if(wheelLock) return; wheelLock=true;
+  requestAnimationFrame(()=>{ p = clamp(p + e.deltaY*SCROLL_SENSITIVITY, 0, pMax); render(); wheelLock=false; });
+},{passive:false});
+
+let touchY=null;
+window.addEventListener('touchstart',e=>{ if(e.touches.length===1) touchY=e.touches[0].clientY; });
+window.addEventListener('touchmove',e=>{
+  if(touchY==null || e.touches.length!==1) return;
+  const dy=touchY - e.touches[0].clientY;
+  p = clamp(p + dy*SCROLL_SENSITIVITY*0.5, 0, pMax); touchY=e.touches[0].clientY; render();
+},{passive:true});
+window.addEventListener('touchend',()=>{ touchY=null; });
+
+/* ---------- Boutons ---------- */
+document.getElementById('resetBtn').addEventListener('click',()=>{ p=0; render(); });
+document.getElementById('homeBtn').addEventListener('click',()=>{ window.location.href = 'sommaire.html'; });
+
+/* ---------- Boot ---------- */
+(function boot(){
+  buildTicks();
+  buildImages().then(()=>{
+    setOpacity('org',1); setSize('org', SIZE.org_start);
+    updateInfo('Échelle du vivant : '+LABELS.org, null);
+    render();
+  });
+})();
+</script>
+</body>
+</html>

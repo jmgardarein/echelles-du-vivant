@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Les échelles du vivant</title>
+<style>
+  :root{
+    --fg:#0b0d10; --muted:#5b6470; --card-bg:rgba(15,23,42,.05);
+    --card-bd:rgba(15,23,42,.12);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--fg);background:#fff}
+
+  .wrap{width:min(1100px,94vw);margin:0 auto;padding:24px;position:relative;min-height:100vh}
+  h1{font-size:clamp(24px,3.4vw,36px);font-weight:900;margin:0 0 20px;text-align:center}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:18px;
+  }
+
+  /* Cartes : même taille (4/3) pour les deux */
+  .card{
+    position:relative;
+    display:block;
+    border-radius:18px;
+    background:var(--card-bg);
+    border:1px solid var(--card-bd);
+    box-shadow:0 14px 40px rgba(0,0,0,.08);
+    transition:transform .18s ease, box-shadow .18s ease;
+    overflow:hidden;
+    aspect-ratio:4/3;
+    text-decoration:none;
+    color:inherit;
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:0 16px 46px rgba(0,0,0,.10)}
+  .card:focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+
+  /* ANIMAL */
+  .card img.cover{
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+
+  /* VÉGÉTAL */
+  .fit-contain{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#f3f4f6;
+  }
+  .fit-contain img{
+    max-width:100%; max-height:100%;
+    width:auto; height:auto;
+    display:block;
+  }
+
+  .lab{
+    position:absolute;left:14px;bottom:14px;
+    padding:10px 14px;border-radius:14px;
+    background:rgba(255,255,255,.86);
+    border:1px solid var(--card-bd);
+    font-weight:800;font-size:18px;letter-spacing:.2px
+  }
+
+  .hint{margin:14px auto 0;text-align:center;color:var(--muted)}
+
+  /* Crédits en bas à droite */
+  .credits{
+    position:absolute;
+    bottom:10px;
+    right:14px;
+    font-size:14px;
+    color:var(--muted);
+    text-align:right;
+    line-height:1.4;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Les échelles du vivant</h1>
+
+    <div class="grid">
+      <!-- Carte Animal -->
+      <a class="card" href="animal.html" aria-label="Explorer l'échelle du vivant pour l'animal (chien)">
+        <img
+          class="cover"
+          src="animal/images/cover.jpg"
+          alt="Chien"
+          loading="lazy"
+          onerror="this.onerror=null;this.src='animal/images/01_animal.jpg'">
+        <div class="lab">Animal : chien</div>
+      </a>
+
+      <!-- Carte Végétal -->
+      <a class="card" href="vegetal.html" aria-label="Explorer l'échelle du vivant pour le végétal (pois)">
+        <div class="fit-contain">
+          <img
+            src="vegetal/images/cover.jpg"
+            alt="Plante (pois)"
+            loading="lazy"
+            onerror="this.onerror=null;this.src='vegetal/images/01_vegetal.jpg'">
+        </div>
+        <div class="lab">Plante : pois</div>
+      </a>
+    </div>
+
+    <p class="hint">Clique sur un visuel pour ouvrir l’animation correspondante.</p>
+
+    <div class="credits">
+      Auteur : Jm Gardarein<br>
+      Images : Biorender, Libmol
+    </div>
+  </div>
+</body>
+</html>
